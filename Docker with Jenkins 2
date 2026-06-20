@@ -1,0 +1,71 @@
+pipeline{
+    agent{
+        node{
+            label "Master"
+        }
+    }
+    tools{
+        maven "MyMaven"
+    }
+    stages{
+        stage("Code"){
+            steps{
+                git 'https://github.com/Sudharsan-Yadav/Docker-3-Tier.git'
+            }
+        }
+        stage("CQA"){
+            steps{
+                withSonarQubeEnv("MySonar") {
+                    sh "mvn clean verify sonar:sonar -Dsonar.projectKey=MyProject"
+                }
+            }
+        }
+        stage("Build"){
+            steps{
+                sh "mvn clean install"
+                sh "cp -r target Docker-app"
+            }
+        }
+        stage("Test"){
+            steps{
+                echo "Testing is also done"
+            }
+        }
+        stage("Artifact"){
+            steps{
+                nexusArtifactUploader artifacts: [[artifactId: 'vprofile', classifier: '', file: 'target/vprofile-v2.war', type: 'war']], credentialsId: 'Nexus', groupId: 'com.visualpathit', nexusUrl: '107.21.55.244:8081/', nexusVersion: 'nexus3', protocol: 'http', repository: 'Krishav', version: 'v2'
+            }
+        }
+        stage("Image"){
+            steps{
+                sh "docker build -t appimage Docker-app"
+                sh "docker build -t dbimage Docker-db"
+            }
+        }
+        stage("Scan Image"){
+            steps{
+                sh "trivy image appimage"
+                sh "trivy image dbimage"
+            }
+        }
+        stage("Tag-Push"){
+            steps{
+                sh "docker tag appimage sudharsan06122000/mynewapp:appimage"
+                sh "docker tag dbimage sudharsan06122000/mynewapp:dbimage"
+            }
+        }
+        stage("Push"){
+            steps{
+                withDockerRegistry(credentialsId: 'Dockerhub') {
+                    sh "docker push sudharsan06122000/mynewapp:appimage"
+                    sh "docker push sudharsan06122000/mynewapp:dbimage"
+                }
+            }
+        }
+        stage("Deploy"){
+            steps{
+                sh "docker stack deploy sudhan --compose-file=compose.yml"
+            }
+        }
+    }
+}
