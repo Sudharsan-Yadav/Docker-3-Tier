@@ -46,3 +46,59 @@ pipeline{
         }
     }
 }
+
+
+----------------------------------------------------------------------------------------------------------------
+
+pipeline{
+    agent any
+    tools{
+        maven "MyMaven"
+    }
+    stages{
+        stage("Code"){
+            steps{
+                git 'https://github.com/Sudharsan-Yadav/Docker-3-Tier.git'
+            }
+        }
+        stage("CQA"){
+            steps{
+                withSonarQubeEnv('MySonar') {
+                sh '''
+                mvn clean verify \
+                org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                -Dsonar.projectKey=MyProject
+                '''
+                }
+            }
+        }
+        stage("Build"){
+            steps{
+                sh "mvn clean install"
+                sh "cp -r target Docker-app"
+            }
+        }
+        stage("Test"){
+            steps{
+                echo "Testing is also done"
+            }
+        }
+        stage("Artifact"){
+            steps{
+                nexusArtifactUploader artifacts: [[artifactId: 'vprofile', classifier: '', file: 'target/vprofile-v2.war', type: 'war']], credentialsId: 'Nexus', groupId: 'com.visualpathit', nexusUrl: '50.17.150.119:8081/', nexusVersion: 'nexus3', protocol: 'http', repository: 'Krishav', version: 'v2'
+            }
+        }
+        stage("Dockerfile"){
+            steps{
+                sh "docker build -t dbimage Docker-db"
+                sh "docker build -t appimage Docker-app"
+            }
+        }
+        stage("Deploy"){
+            steps{
+                sh "docker run -d --name devopsdb -p 3306:3306 dbimage"
+                sh "docker run -itd --name appcont -p 1234:8080 --link devopsdb:MySqlContainer appimage"
+            }
+        }
+    }
+}
