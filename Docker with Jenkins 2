@@ -1,8 +1,6 @@
 pipeline{
     agent{
-        node{
-            label "Master"
-        }
+        label "Dev"
     }
     tools{
         maven "MyMaven"
@@ -16,7 +14,7 @@ pipeline{
         stage("CQA"){
             steps{
                 withSonarQubeEnv("MySonar") {
-                    sh "mvn clean verify sonar:sonar -Dsonar.projectKey=MyProject"
+                    sh "mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=MyProject"
                 }
             }
         }
@@ -28,12 +26,12 @@ pipeline{
         }
         stage("Test"){
             steps{
-                echo "Testing is also done"
+                echo "Testing is done"
             }
         }
         stage("Artifact"){
             steps{
-                nexusArtifactUploader artifacts: [[artifactId: 'vprofile', classifier: '', file: 'target/vprofile-v2.war', type: 'war']], credentialsId: 'Nexus', groupId: 'com.visualpathit', nexusUrl: '107.21.55.244:8081/', nexusVersion: 'nexus3', protocol: 'http', repository: 'Krishav', version: 'v2'
+                nexusArtifactUploader artifacts: [[artifactId: 'vprofile', classifier: '', file: 'target/vprofile-v2.war', type: 'war']], credentialsId: 'Nexus', groupId: 'com.visualpathit', nexusUrl: '98.91.250.114:8081/', nexusVersion: 'nexus3', protocol: 'http', repository: 'Krishav', version: 'v2'
             }
         }
         stage("Image"){
@@ -42,29 +40,31 @@ pipeline{
                 sh "docker build -t dbimage Docker-db"
             }
         }
-        stage("Scan Image"){
+        stage("Image_Scan"){
             steps{
                 sh "trivy image appimage"
                 sh "trivy image dbimage"
             }
         }
-        stage("Tag-Push"){
+        stage("Image_Tag"){
             steps{
                 sh "docker tag appimage sudharsan06122000/mynewapp:appimage"
                 sh "docker tag dbimage sudharsan06122000/mynewapp:dbimage"
             }
         }
-        stage("Push"){
+        stage("Image_Push"){
             steps{
-                withDockerRegistry(credentialsId: 'Dockerhub') {
+                script{
+                    withDockerRegistry(credentialsId: 'Dockerhub') {
                     sh "docker push sudharsan06122000/mynewapp:appimage"
                     sh "docker push sudharsan06122000/mynewapp:dbimage"
+                    }
                 }
             }
         }
         stage("Deploy"){
             steps{
-                sh "docker stack deploy sudhan --compose-file=compose.yml"
+                sh "docker stack deploy app -c compose.yml"
             }
         }
     }
